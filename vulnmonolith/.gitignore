@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+target/
+build/
+dist/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.class
+*.jar
+*.war
+*.ear
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Environment files (but we intentionally include some for testing)
+# .env
+# .env.local
+# .env.production
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Secrets (but we intentionally include some for testing)
+# *.pem
+# *.key
+# credentials.json
+
+# Package locks we want to keep for vulnerability testing
+# package-lock.json
+# yarn.lock
+# Pipfile.lock
+# poetry.lock
+# Cargo.lock
+# go.sum

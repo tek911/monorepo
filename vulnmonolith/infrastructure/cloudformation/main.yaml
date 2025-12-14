@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VulnMonolith Infrastructure - INTENTIONALLY VULNERABLE'
+
+# WARNING: This CloudFormation template contains intentional security misconfigurations
+# DO NOT deploy to any AWS account
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+
+  # VULNERABILITY: Password parameter with default value
+  DatabasePassword:
+    Type: String
+    Default: 'SuperSecretPassword123!'
+    NoEcho: true
+
+  # VULNERABILITY: Hardcoded API key in parameter
+  ApiKey:
+    Type: String
+    Default: 'sk_live_FAKEFAKEFAKEFAKE_NOTREAL'
+
+Resources:
+  # S3 Bucket - Public and Unencrypted
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vulnmonolith-data-${Environment}'
+      # VULNERABILITY: No encryption
+      # VULNERABILITY: No versioning
+      # VULNERABILITY: No logging
+      # VULNERABILITY: Public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  # VULNERABILITY: Bucket policy allows public access
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+            Resource: !Sub '${DataBucket.Arn}/*'
+
+  # Security Group - Open to World
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Application Security Group
+      # VULNERABILITY: Ingress from 0.0.0.0/0
+      SecurityGroupIngress:
+        # VULNERABILITY: SSH open to world
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        # VULNERABILITY: HTTP open to world
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        # VULNERABILITY: HTTPS open to world
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        # VULNERABILITY: Database port open to world
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+        # VULNERABILITY: All ports open
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+
+  # RDS Instance - Publicly Accessible
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: vulnmonolith-db
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '5.7'
+      # VULNERABILITY: Hardcoded credentials
+      MasterUsername: admin
+      MasterUserPassword: !Ref DatabasePassword
+      AllocatedStorage: 20
+      # VULNERABILITY: Publicly accessible
+      PubliclyAccessible: true
+      # VULNERABILITY: No encryption
+      StorageEncrypted: false
+      # VULNERABILITY: No backup retention
+      BackupRetentionPeriod: 0
+      # VULNERABILITY: No deletion protection
+      DeletionProtection: false
+      # VULNERABILITY: No multi-AZ
+      MultiAZ: false
+      VPCSecurityGroups:
+        - !GetAtt AppSecurityGroup.GroupId
+
+  # IAM Role - Overly Permissive
+  AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vulnmonolith-app-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      # VULNERABILITY: Admin policy attached
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      # VULNERABILITY: Inline policy with * permissions
+      Policies:
+        - PolicyName: FullAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+
+  # Lambda Function with Secrets in Environment
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: vulnmonolith-processor
+      Runtime: nodejs14.x
+      Handler: index.handler
+      Role: !GetAtt AppRole.Arn
+      # VULNERABILITY: Secrets in environment variables
+      Environment:
+        Variables:
+          DB_PASSWORD: !Ref DatabasePassword
+          API_KEY: !Ref ApiKey
+          JWT_SECRET: 'hardcoded-jwt-secret'
+          AWS_ACCESS_KEY: 'AKIAIOSFODNN7EXAMPLE'
+          AWS_SECRET_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'OK' };
+          };
+
+  # EC2 Instance with User Data Secrets
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-12345678
+      SecurityGroupIds:
+        - !GetAtt AppSecurityGroup.GroupId
+      IamInstanceProfile: !Ref AppInstanceProfile
+      # VULNERABILITY: User data with secrets
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "DB_PASSWORD=${DatabasePassword}" >> /etc/environment
+          echo "API_KEY=${ApiKey}" >> /etc/environment
+          echo "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" >> /etc/environment
+          echo "AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" >> /etc/environment
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AppRole
+
+  # SNS Topic without encryption
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: vulnmonolith-alerts
+      # VULNERABILITY: No KMS encryption
+      # VULNERABILITY: No access policy
+
+  # SQS Queue without encryption
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: vulnmonolith-processing
+      # VULNERABILITY: No encryption
+      # VULNERABILITY: No DLQ configured
+
+Outputs:
+  # VULNERABILITY: Outputting sensitive information
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DatabasePassword:
+    Value: !Ref DatabasePassword
+  BucketName:
+    Value: !Ref DataBucket

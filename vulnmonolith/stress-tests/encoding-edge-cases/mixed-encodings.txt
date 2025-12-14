@@ -1,0 +1,17 @@
+This file contains mixed encodings for testing
+UTF-8: Hello, 世界, مرحبا, שלום
+ASCII: Regular text here
+Password hidden: secret_password_123
+API Key: sk_live_mixed_encoding_test
+
+Special characters: é à ü ñ ø
+Emoji: 🔐 🔑 🔒 💻
+
+-- SQL comment with credentials
+-- db_password = 'MixedEncodingPassword!'
+
+# Python comment with secret
+# jwt_secret = "jwt-mixed-encoding-secret"
+
+// JS comment with API key
+// const apiKey = "api_key_in_mixed_file";

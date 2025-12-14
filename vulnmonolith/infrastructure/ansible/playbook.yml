@@ -1,0 +1,128 @@
+---
+# Ansible Playbook - INTENTIONALLY VULNERABLE
+# WARNING: Contains security misconfigurations for testing
+
+- name: Deploy Vulnerable Application
+  hosts: all
+  become: yes
+  # VULNERABILITY: Running as root without justification
+
+  vars:
+    # VULNERABILITY: Hardcoded credentials in playbook
+    db_password: "SuperSecretPassword123!"
+    api_key: "sk_live_FAKEFAKEFAKEFAKE_NOTREAL"
+    jwt_secret: "hardcoded-jwt-secret"
+    aws_access_key: "AKIAIOSFODNN7EXAMPLE"
+    aws_secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+    # VULNERABILITY: Hardcoded SSH key
+    ssh_private_key: |
+      -----BEGIN RSA PRIVATE KEY-----
+      MIIEpAIBAAKCAQEA2Z3qX2BTLS4e0ek55tJJOAMKsJhKwLkBL/x+K3D7kZ9rkJpC
+      fake-private-key-for-testing-purposes-only
+      do-not-use-in-production-environment
+      -----END RSA PRIVATE KEY-----
+
+  tasks:
+    # VULNERABILITY: Disabling SELinux
+    - name: Disable SELinux
+      selinux:
+        state: disabled
+
+    # VULNERABILITY: Disabling firewall
+    - name: Stop firewalld
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+
+    # VULNERABILITY: Installing insecure packages
+    - name: Install packages
+      yum:
+        name:
+          - telnet  # VULNERABILITY: Insecure protocol
+          - rsh     # VULNERABILITY: Insecure protocol
+          - tftp    # VULNERABILITY: Insecure protocol
+        state: present
+
+    # VULNERABILITY: Writing credentials to file
+    - name: Create environment file
+      copy:
+        content: |
+          DB_PASSWORD={{ db_password }}
+          API_KEY={{ api_key }}
+          JWT_SECRET={{ jwt_secret }}
+          AWS_ACCESS_KEY={{ aws_access_key }}
+          AWS_SECRET_KEY={{ aws_secret_key }}
+        dest: /etc/app/environment
+        mode: '0644'  # VULNERABILITY: World-readable
+
+    # VULNERABILITY: Creating user with weak password
+    - name: Create application user
+      user:
+        name: appuser
+        password: "{{ 'password123' | password_hash('sha512') }}"
+        shell: /bin/bash
+        # VULNERABILITY: Adding to wheel/sudo group
+        groups: wheel
+
+    # VULNERABILITY: SSH configuration weakening
+    - name: Configure SSH (insecure)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      with_items:
+        # VULNERABILITY: Allowing root login
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin yes' }
+        # VULNERABILITY: Password authentication enabled
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication yes' }
+        # VULNERABILITY: Empty passwords allowed
+        - { regexp: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords yes' }
+        # VULNERABILITY: Weak ciphers
+        - { regexp: '^#?Ciphers', line: 'Ciphers 3des-cbc,aes128-cbc' }
+
+    # VULNERABILITY: World-writable directory
+    - name: Create data directory
+      file:
+        path: /var/app/data
+        state: directory
+        mode: '0777'
+
+    # VULNERABILITY: Executing shell command with user input
+    - name: Run setup script
+      shell: |
+        /opt/setup.sh {{ user_input }}
+      # VULNERABILITY: No input validation
+
+    # VULNERABILITY: Downloading from HTTP (not HTTPS)
+    - name: Download application
+      get_url:
+        url: http://insecure-server.com/app.tar.gz  # VULNERABILITY: HTTP
+        dest: /tmp/app.tar.gz
+        validate_certs: no  # VULNERABILITY: Skipping cert validation
+
+    # VULNERABILITY: Using command instead of module
+    - name: Install application
+      command: tar -xzf /tmp/app.tar.gz -C /opt/
+      # Should use unarchive module
+
+    # VULNERABILITY: Storing private key
+    - name: Deploy SSH key
+      copy:
+        content: "{{ ssh_private_key }}"
+        dest: /root/.ssh/id_rsa
+        mode: '0600'
+
+    # VULNERABILITY: Adding insecure sudoers rule
+    - name: Configure sudo
+      lineinfile:
+        path: /etc/sudoers
+        line: 'appuser ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
+  handlers:
+    - name: Restart SSH
+      service:
+        name: sshd
+        state: restarted

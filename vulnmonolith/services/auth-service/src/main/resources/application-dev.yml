@@ -1,0 +1,88 @@
+# Development Configuration
+# WARNING: Contains hardcoded secrets for testing
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:authdb
+    username: sa
+    # VULNERABILITY: Empty password for development
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    # VULNERABILITY: SQL logging enabled
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        # VULNERABILITY: Remote access to H2 console
+        web-allow-others: true
+
+# VULNERABILITY: Debug mode enabled
+debug: true
+
+# Logging
+logging:
+  level:
+    root: DEBUG
+    com.vulnmonolith: TRACE
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+# VULNERABILITY: OAuth credentials
+oauth:
+  google:
+    client-id: "123456789-abcdefg.apps.googleusercontent.com"
+    client-secret: "GOCSPX-fake-client-secret-123"
+  github:
+    client-id: "Iv1.abc123def456"
+    client-secret: "github-client-secret-do-not-commit"
+
+# VULNERABILITY: API keys for external services
+external-services:
+  stripe:
+    api-key: "sk_test_FAKEFAKEFAKEFAKE_NOTREAL"
+    webhook-secret: "whsec_test_secret_12345"
+  sendgrid:
+    api-key: "SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  twilio:
+    account-sid: "AC_FAKE_TWILIO_SID_NOT_REAL_000000"
+    auth-token: "1234567890abcdef1234567890abcdef"
+
+# VULNERABILITY: Database backup credentials
+backup:
+  s3:
+    bucket: "vulnmonolith-backups"
+    access-key: "AKIAIOSFODNN7EXAMPLE"
+    secret-key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# VULNERABILITY: Internal service tokens
+internal:
+  auth-token: "internal-bearer-token-super-secret-123"
+  admin-api-key: "admin-api-key-never-share-456"
+
+# VULNERABILITY: JWT configuration
+jwt:
+  secret: "devJwtSecretKey123!@#DoNotUseInProd"
+  # VULNERABILITY: 1 year expiration
+  expiration-ms: 31536000000
+  refresh-secret: "refreshTokenSecret456$%^"
+
+# VULNERABILITY: Encryption configuration
+encryption:
+  aes:
+    key: "0123456789abcdef0123456789abcdef"
+    iv: "abcdef0123456789"
+  rsa:
+    private-key: |
+      -----BEGIN RSA PRIVATE KEY-----
+      MIIEpAIBAAKCAQEA2Z3qX2BTLS4e0ek55tJJOAMKsJhKwLkBL/x+K3D7kZ9rkJpC
+      fake-private-key-for-testing-purposes-only
+      do-not-use-in-production-environment
+      -----END RSA PRIVATE KEY-----

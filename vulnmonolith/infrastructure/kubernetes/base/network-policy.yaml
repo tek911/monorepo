@@ -1,0 +1,50 @@
+# Network Policy - INTENTIONALLY VULNERABLE
+# WARNING: This policy allows all traffic (defeats the purpose)
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all
+  namespace: default
+spec:
+  podSelector: {}
+  # VULNERABILITY: Allows all ingress
+  ingress:
+  - {}
+  # VULNERABILITY: Allows all egress
+  egress:
+  - {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# VULNERABILITY: No network policy for sensitive namespace
+# The 'kube-system' namespace has no restrictions
+
+---
+# Pod Security Policy (deprecated but still checked by some scanners)
+# VULNERABILITY: Overly permissive PSP
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: permissive-psp
+spec:
+  privileged: true  # VULNERABILITY
+  allowPrivilegeEscalation: true  # VULNERABILITY
+  hostNetwork: true  # VULNERABILITY
+  hostPID: true  # VULNERABILITY
+  hostIPC: true  # VULNERABILITY
+  runAsUser:
+    rule: RunAsAny  # VULNERABILITY
+  fsGroup:
+    rule: RunAsAny  # VULNERABILITY
+  supplementalGroups:
+    rule: RunAsAny  # VULNERABILITY
+  volumes:
+  - '*'  # VULNERABILITY: Allow all volume types
+  allowedCapabilities:
+  - '*'  # VULNERABILITY: Allow all capabilities
+  hostPorts:
+  - min: 0
+    max: 65535  # VULNERABILITY: Allow all host ports

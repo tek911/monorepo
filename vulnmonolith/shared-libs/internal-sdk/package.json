@@ -1,0 +1,19 @@
+{
+  "name": "@vulnmonolith/internal-sdk",
+  "version": "1.0.0",
+  "description": "Internal SDK - INTENTIONALLY VULNERABLE",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "axios": "0.21.0",
+    "lodash": "4.17.15"
+  },
+  "devDependencies": {
+    "typescript": "4.5.0",
+    "@types/node": "14.0.0"
+  }
+}

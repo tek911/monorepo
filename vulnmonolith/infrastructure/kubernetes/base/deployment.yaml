@@ -1,0 +1,181 @@
+# Kubernetes Deployment - INTENTIONALLY VULNERABLE
+# WARNING: Contains security misconfigurations for testing
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnerable-app
+  namespace: default
+  labels:
+    app: vulnerable-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vulnerable-app
+  template:
+    metadata:
+      labels:
+        app: vulnerable-app
+    spec:
+      # VULNERABILITY: No service account specified (uses default)
+      # VULNERABILITY: No pod security context
+
+      containers:
+      - name: app
+        # VULNERABILITY: Using 'latest' tag
+        image: vulnmonolith/app:latest
+
+        # VULNERABILITY: Running as root
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          # VULNERABILITY: Privileged container
+          privileged: true
+          # VULNERABILITY: Allow privilege escalation
+          allowPrivilegeEscalation: true
+          # VULNERABILITY: Read-write root filesystem
+          readOnlyRootFilesystem: false
+          # VULNERABILITY: All capabilities added
+          capabilities:
+            add:
+              - ALL
+
+        # VULNERABILITY: No resource limits (can consume all resources)
+        # resources:
+        #   limits:
+        #     cpu: "1"
+        #     memory: "512Mi"
+
+        ports:
+        - containerPort: 8080
+
+        # VULNERABILITY: Environment variables with secrets
+        env:
+        - name: DB_PASSWORD
+          value: "SuperSecretPassword123!"
+        - name: API_KEY
+          value: "sk_live_FAKEFAKEFAKEFAKE_NOTREAL"
+        - name: JWT_SECRET
+          value: "jwt-secret-key-hardcoded"
+        - name: AWS_ACCESS_KEY_ID
+          value: "AKIAIOSFODNN7EXAMPLE"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+        # VULNERABILITY: Mounting sensitive host paths
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: host-etc
+          mountPath: /host-etc
+        - name: host-proc
+          mountPath: /host-proc
+
+        # VULNERABILITY: No liveness/readiness probes
+
+      volumes:
+      # VULNERABILITY: Mounting host root filesystem
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+      # VULNERABILITY: Mounting Docker socket
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      # VULNERABILITY: Mounting /etc
+      - name: host-etc
+        hostPath:
+          path: /etc
+          type: Directory
+      # VULNERABILITY: Mounting /proc
+      - name: host-proc
+        hostPath:
+          path: /proc
+          type: Directory
+
+      # VULNERABILITY: Host networking enabled
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
+
+      # VULNERABILITY: No node selector or affinity rules
+      # VULNERABILITY: No pod disruption budget
+
+---
+# Service without TLS
+apiVersion: v1
+kind: Service
+metadata:
+  name: vulnerable-app-service
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    app: vulnerable-app
+  ports:
+  # VULNERABILITY: Exposing on non-standard port without TLS
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+
+---
+# VULNERABILITY: Secrets stored as plain text in ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-secrets
+  namespace: default
+data:
+  # VULNERABILITY: Secrets in ConfigMap (should be Secret)
+  database.password: "SuperSecretPassword123!"
+  api.key: "sk_live_FAKEFAKEFAKEFAKE_NOTREAL"
+  jwt.secret: "jwt-secret-key-hardcoded"
+
+---
+# VULNERABILITY: ServiceAccount with cluster-admin
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vulnerable-service-account
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vulnerable-cluster-admin-binding
+subjects:
+- kind: ServiceAccount
+  name: vulnerable-service-account
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  # VULNERABILITY: Cluster-admin access
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# VULNERABILITY: Ingress without TLS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vulnerable-ingress
+  namespace: default
+spec:
+  rules:
+  - host: app.vulnmonolith.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vulnerable-app-service
+            port:
+              number: 80
+  # VULNERABILITY: No TLS configuration
