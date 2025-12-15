@@ -1,0 +1,25 @@
+# Trivy ignore file
+# Test: Verify Trivy respects ignore patterns
+
+# ISSUE: Ignoring critical CVEs
+CVE-2021-44228    # Log4Shell - should never be ignored
+CVE-2021-45046    # Log4j follow-up
+CVE-2022-22965    # Spring4Shell
+
+# ISSUE: Ignoring based on "false positive" claims
+CVE-2021-3449     # OpenSSL DoS - "not exploitable in our config"
+CVE-2021-23337    # Lodash prototype pollution - "test code only"
+
+# ISSUE: Blanket ignores for vulnerability types
+CVE-2020-*        # All 2020 CVEs - "too old to matter"
+CVE-2019-*        # All 2019 CVEs
+
+# ISSUE: Ignoring container vulnerabilities
+CVE-2021-22945    # curl vulnerability
+CVE-2021-22946    # curl vulnerability
+CVE-2021-22947    # curl vulnerability
+
+# Secrets that are "intentional"
+aws-access-key-id
+aws-secret-access-key
+generic-api-key

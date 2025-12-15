@@ -1,0 +1,50 @@
+# Release Workflow with security issues
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+
+# VULNERABILITY: Excessive permissions for release workflow
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # VULNERABILITY: Using input directly in shell command
+      - name: Set version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Releasing version: $VERSION"
+          sed -i "s/VERSION=.*/VERSION=$VERSION/" version.txt
+
+      # VULNERABILITY: Hardcoded NPM token
+      - name: Publish to NPM
+        run: |
+          echo "//registry.npmjs.org/:_authToken=npm_MjQxNzE4NzY1NDMyMTY1NDMyMTY1" > ~/.npmrc
+          npm publish
+
+      # VULNERABILITY: Hardcoded Docker credentials
+      - name: Push Docker Image
+        run: |
+          echo "dckr_pat_example_token_12345" | docker login -u vulnmonolith --password-stdin
+          docker build -t vulnmonolith/app:${{ github.event.inputs.version }} .
+          docker push vulnmonolith/app:${{ github.event.inputs.version }}
+
+      - name: Create GitHub Release
+        env:
+          # VULNERABILITY: Token with excessive scope
+          GH_TOKEN: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        run: |
+          gh release create v${{ github.event.inputs.version }} --generate-notes

@@ -1,0 +1,59 @@
+# Gitleaks configuration
+# Test: Verify Gitleaks respects custom rules and allowlists
+
+title = "VulnMonolith Gitleaks Config"
+
+[extend]
+useDefault = true
+
+# ISSUE: Overly permissive allowlists
+[allowlist]
+  description = "Global allowlist"
+
+  # ISSUE: Allowing all files in certain directories
+  paths = [
+    '''test-fixtures/.*''',
+    '''orphaned/.*''',
+    '''docs/.*''',
+    '''.scannerconfigs/.*''',
+    '''.*\.md$''',
+    '''.*\.example$''',
+  ]
+
+  # ISSUE: Allowing patterns that look like real secrets
+  regexes = [
+    '''EXAMPLE''',
+    '''example''',
+    '''test''',
+    '''fake''',
+    '''dummy''',
+    '''placeholder''',
+    '''xxxx''',
+    '''your-.*-here''',
+  ]
+
+  # ISSUE: Specific commits excluded
+  commits = [
+    "abc123def456",
+    "deadbeef1234",
+  ]
+
+# ISSUE: Disabling important rules
+[[rules]]
+  id = "aws-access-key-id"
+  description = "AWS Access Key ID"
+  regex = '''AKIA[0-9A-Z]{16}'''
+  # ISSUE: Rule effectively disabled by broad allowlist
+  [rules.allowlist]
+    regexes = ['''.*EXAMPLE.*''', '''.*test.*''']
+
+[[rules]]
+  id = "generic-api-key"
+  description = "Generic API Key"
+  regex = '''(?i)api[_-]?key.*['\"][0-9a-zA-Z]{32,}['\"]'''
+  # ISSUE: Low entropy threshold misses weak secrets
+  entropy = 4.5
+
+# ISSUE: Short stopwords list
+[rules.allowlist]
+  stopwords = ["password123", "admin", "test"]

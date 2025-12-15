@@ -1,0 +1,49 @@
+# Bandit configuration for Python security scanning
+# Test: Verify Bandit respects YAML configuration
+
+# ISSUE: Skipping important security checks
+skips:
+  - B101  # assert_used - "only in tests"
+  - B104  # hardcoded_bind_all_interfaces
+  - B105  # hardcoded_password_string
+  - B106  # hardcoded_password_funcarg
+  - B107  # hardcoded_password_default
+  - B108  # hardcoded_tmp_directory
+  - B110  # try_except_pass
+  - B301  # pickle usage
+  - B303  # insecure MD5/SHA1
+  - B306  # mktemp_q
+  - B307  # eval usage
+  - B310  # urllib_urlopen
+  - B311  # random for crypto
+  - B320  # xml parsing
+  - B324  # hashlib insecure
+  - B501  # request_with_no_cert_validation
+  - B502  # ssl_with_bad_version
+  - B503  # ssl_with_bad_defaults
+  - B506  # yaml_load
+  - B602  # subprocess_popen_with_shell_equals_true
+  - B605  # start_process_with_a_shell
+  - B607  # start_process_with_partial_path
+  - B608  # hardcoded_sql_expressions
+
+# ISSUE: Excluding critical paths
+exclude_dirs:
+  - test-fixtures
+  - orphaned
+  - .venv
+  - venv
+  - vendor
+  - docs
+
+# ISSUE: Very low confidence threshold (catches nothing)
+confidence: HIGH
+severity: HIGH
+
+# ISSUE: Targeting only specific files instead of full scan
+targets:
+  - services/billing-service
+
+# Custom settings
+assert_used:
+  skips: ['*_test.py', '*_tests.py', 'test_*.py']

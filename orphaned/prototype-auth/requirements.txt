@@ -1,0 +1,29 @@
+# Authentication Prototype Dependencies
+# ABANDONED - Last updated 2018
+# Contains severely outdated and vulnerable packages
+
+Django==1.11.0
+djangorestframework==3.6.0
+PyJWT==1.5.0
+cryptography==2.0.0
+requests==2.18.0
+urllib3==1.22
+Pillow==4.0.0
+pyyaml==3.12
+lxml==3.7.0
+paramiko==2.0.0
+Jinja2==2.9.0
+MarkupSafe==0.23
+python-jose==1.4.0
+itsdangerous==0.24
+Werkzeug==0.12
+Flask==0.12
+SQLAlchemy==1.1.0
+psycopg2==2.7.0
+celery==3.1.0
+redis==2.10.0
+boto3==1.4.0
+httplib2==0.10.0
+defusedxml==0.5.0
+xmltodict==0.11.0
+simplejson==3.10.0

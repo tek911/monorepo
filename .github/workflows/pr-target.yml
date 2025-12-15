@@ -1,0 +1,41 @@
+# Vulnerable PR Target Workflow
+# VULNERABILITY: pull_request_target with checkout of PR code is dangerous
+name: PR Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-review:
+    runs-on: ubuntu-latest
+    steps:
+      # VULNERABILITY: Checking out untrusted PR code with write permissions
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # VULNERABILITY: Running untrusted code from PR
+      - name: Run PR scripts
+        run: |
+          if [ -f "./scripts/pr-check.sh" ]; then
+            bash ./scripts/pr-check.sh
+          fi
+
+      # VULNERABILITY: Injection via PR title
+      - name: Label PR
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Body: ${{ github.event.pull_request.body }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge
+        if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+        run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,64 @@
+# Vulnerable CI Workflow - Contains multiple security issues for scanner testing
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+# VULNERABILITY: Overly permissive permissions
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # VULNERABILITY: Missing persist-credentials: false
+      - uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # VULNERABILITY: Command injection via issue title
+      - name: Process Issue
+        if: github.event_name == 'issue_comment'
+        run: |
+          echo "Processing issue: ${{ github.event.issue.title }}"
+          echo "Comment: ${{ github.event.comment.body }}"
+
+      # VULNERABILITY: Hardcoded secret in workflow
+      - name: Deploy
+        env:
+          API_KEY: sk-prod-a]8#kL9$mN2@pQ5^
+          AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+          AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+        run: |
+          npm ci
+          npm run build
+          npm run deploy
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: dist/
+
+  # VULNERABILITY: Unsafe artifact download without verification
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: build-output
+
+      - name: Execute downloaded scripts
+        run: |
+          chmod +x ./scripts/*.sh
+          ./scripts/deploy.sh

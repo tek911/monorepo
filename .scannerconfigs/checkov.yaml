@@ -1,0 +1,47 @@
+# Checkov configuration
+# Test: Verify Checkov respects custom configurations
+
+framework:
+  - terraform
+  - cloudformation
+  - kubernetes
+  - dockerfile
+
+# ISSUE: Skipping important security checks
+skip-check:
+  # Network security
+  - CKV_AWS_23    # Security group allows ingress from 0.0.0.0/0
+  - CKV_AWS_24    # Security group allows egress to 0.0.0.0/0
+  - CKV_AWS_25    # Security group allows SSH from 0.0.0.0/0
+
+  # Encryption
+  - CKV_AWS_19    # S3 bucket encryption
+  - CKV_AWS_145   # S3 bucket encryption with KMS
+  - CKV_AWS_17    # RDS encryption
+
+  # Logging
+  - CKV_AWS_18    # S3 bucket access logging
+  - CKV_AWS_21    # CloudTrail logging
+  - CKV_AWS_50    # Lambda X-Ray tracing
+
+  # IAM
+  - CKV_AWS_40    # IAM password policy
+  - CKV_AWS_49    # IAM policies with wildcards
+  - CKV_AWS_1     # IAM policies attached to users
+
+  # Kubernetes
+  - CKV_K8S_1     # Privileged containers
+  - CKV_K8S_8     # Liveness probe
+  - CKV_K8S_9     # Readiness probe
+  - CKV_K8S_20    # RunAsNonRoot
+  - CKV_K8S_22    # Read-only filesystem
+  - CKV_K8S_28    # NET_RAW capability
+
+# ISSUE: Very permissive directory exclusions
+directory:
+  - test-fixtures
+  - orphaned
+  - vendor
+  - node_modules
+
+soft-fail: true  # ISSUE: Never fails the build

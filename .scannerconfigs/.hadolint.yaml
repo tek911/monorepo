@@ -1,0 +1,49 @@
+# Hadolint Dockerfile linting configuration
+# Test: Verify Hadolint respects ignore rules
+
+# ISSUE: Ignoring important security rules
+ignored:
+  # Package pinning
+  - DL3007  # Using latest tag
+  - DL3008  # Pin versions in apt-get
+  - DL3013  # Pin versions in pip
+  - DL3016  # Pin versions in npm
+  - DL3018  # Pin versions in apk
+
+  # User security
+  - DL3002  # Last user should not be root
+  - DL3025  # Use JSON for CMD/ENTRYPOINT
+
+  # Shell issues
+  - DL3001  # Some commands don't make sense in Docker
+  - DL4000  # MAINTAINER is deprecated
+  - DL4001  # Use wget or curl, not both
+  - DL4003  # Multiple CMD instructions
+  - DL4006  # Set SHELL for different shells
+
+  # Security hardening
+  - SC2086  # Double quote to prevent globbing
+  - SC2046  # Quote to prevent word splitting
+
+# Override rule severity - ISSUE: Downgrading security issues
+override:
+  warning:
+    - DL3003  # Use WORKDIR instead of cd
+    - DL3006  # Always tag the version of an image explicitly
+    - DL3009  # Delete apt-get lists after installing
+  info:
+    - DL3000  # Use absolute WORKDIR
+    - DL3005  # Do not use apt-get upgrade
+
+# Trusted registries - ISSUE: Trusting potentially insecure registries
+trustedRegistries:
+  - docker.io
+  - gcr.io
+  - ghcr.io
+  - registry.internal.example.com
+  - "*"  # ISSUE: Trusting all registries
+
+# Label schema - not enforced
+label-schema:
+  maintainer: text
+  version: semver
