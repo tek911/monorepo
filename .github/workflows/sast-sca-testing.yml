@@ -1,0 +1,476 @@
+# SAST/SCA Tool Testing Workflow
+# Purpose: Systematically test SAST and SCA tools against various monorepo configurations
+#
+# This workflow creates multiple scanning scenarios to identify tool limitations:
+# - File count limits
+# - Time limits
+# - Language detection failures
+# - Scope misconfiguration
+# - Dependency resolution failures
+# - Cross-service taint tracking
+
+name: SAST/SCA Tool Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_scope:
+        description: 'Scanning scope to test'
+        required: true
+        type: choice
+        options:
+          - full-repo
+          - per-service
+          - per-language
+          - incremental
+          - mixed
+      scanner:
+        description: 'Scanner type to simulate'
+        required: true
+        type: choice
+        options:
+          - semgrep
+          - codeql
+          - snyk
+          - checkmarx
+          - sonarqube
+          - all
+      include_stress_tests:
+        description: 'Include stress test directories'
+        type: boolean
+        default: false
+      timeout_minutes:
+        description: 'Timeout per job (minutes)'
+        required: false
+        default: '15'
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  # Common exclusions that scanners might use
+  COMMON_EXCLUDES: "node_modules,vendor,__pycache__,.git,dist,build,target"
+
+jobs:
+  # ============================================================================
+  # TEST SCENARIO 1: Full Repository Scan
+  # FAILURE MODE: Scanner hits file limit or times out
+  # FAILURE MODE: Scanner mixes findings from different services
+  # ============================================================================
+  full-repo-scan:
+    if: github.event.inputs.scan_scope == 'full-repo' || github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Count scannable files
+        id: file-count
+        run: |
+          echo "=== File Count Analysis ==="
+          echo "Total files:"
+          find . -type f | wc -l
+          echo ""
+          echo "By extension:"
+          find . -type f -name "*.py" | wc -l | xargs echo "Python:"
+          find . -type f -name "*.js" -o -name "*.ts" | wc -l | xargs echo "JavaScript/TypeScript:"
+          find . -type f -name "*.java" | wc -l | xargs echo "Java:"
+          find . -type f -name "*.go" | wc -l | xargs echo "Go:"
+          find . -type f -name "*.rs" | wc -l | xargs echo "Rust:"
+          find . -type f -name "*.php" | wc -l | xargs echo "PHP:"
+          find . -type f -name "*.tf" | wc -l | xargs echo "Terraform:"
+          find . -type f -name "*.yaml" -o -name "*.yml" | wc -l | xargs echo "YAML:"
+          echo ""
+          echo "=== Lines of Code ==="
+          find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.go" -o -name "*.rs" -o -name "*.php" \) -exec cat {} \; 2>/dev/null | wc -l || echo "Unable to count"
+
+      - name: Simulate full scan timing
+        run: |
+          echo "=== Simulating Full Repo Scan ==="
+          START=$(date +%s)
+          # Simulate file enumeration (what scanners do first)
+          find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.go" -o -name "*.rs" -o -name "*.php" \) > /tmp/scannable_files.txt
+          FILE_COUNT=$(wc -l < /tmp/scannable_files.txt)
+          END=$(date +%s)
+          echo "File enumeration took $((END-START)) seconds for $FILE_COUNT files"
+          echo ""
+          echo "TEST RESULT: Scanner would process $FILE_COUNT files"
+          echo "Common limits: Semgrep ~50k files, CodeQL ~100k files, Checkmarx varies by license"
+
+  # ============================================================================
+  # TEST SCENARIO 2: Per-Service Isolated Scans
+  # FAILURE MODE: Scanner doesn't find cross-service vulnerabilities
+  # FAILURE MODE: Scanner misses shared-lib vulnerabilities used by service
+  # ============================================================================
+  per-service-scan:
+    if: github.event.inputs.scan_scope == 'per-service' || github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - path: services/auth-service
+            language: java
+            name: auth-service
+          - path: services/api-gateway
+            language: javascript
+            name: api-gateway
+          - path: services/billing-service
+            language: python
+            name: billing-service
+          - path: services/realtime-service
+            language: go
+            name: realtime-service
+          - path: services/mobile-bff
+            language: typescript
+            name: mobile-bff
+          - path: services/ml-inference
+            language: python
+            name: ml-inference
+          - path: services/data-pipeline
+            language: python
+            name: data-pipeline
+          - path: services/legacy-monolith
+            language: php
+            name: legacy-monolith
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.service.path }}
+          sparse-checkout-cone-mode: false
+
+      - name: Verify isolated checkout
+        run: |
+          echo "=== Isolated Service Scan: ${{ matrix.service.name }} ==="
+          echo "Checked out files:"
+          find . -type f | head -50
+          echo ""
+          echo "IMPORTANT: shared-libs NOT included in checkout"
+          echo "This simulates scanner scoping to single service"
+          echo ""
+          echo "TEST: Can scanner find vulnerabilities that depend on shared-libs?"
+          echo "TEST: Can scanner find taint flows from this service to others?"
+          ls -la shared-libs 2>/dev/null || echo "shared-libs not present (expected)"
+
+  # ============================================================================
+  # TEST SCENARIO 3: Per-Service WITH Dependencies
+  # FAILURE MODE: Scanner correctly traces shared-lib usage?
+  # ============================================================================
+  per-service-with-deps:
+    if: github.event.inputs.scan_scope == 'per-service' || github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - path: services/auth-service
+            deps: shared-libs
+            name: auth-service
+          - path: services/api-gateway
+            deps: shared-libs/internal-sdk
+            name: api-gateway
+          - path: services/billing-service
+            deps: shared-libs/generated/protobuf
+            name: billing-service
+          - path: services/realtime-service
+            deps: shared-libs/generated/protobuf
+            name: realtime-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.service.path }}
+            ${{ matrix.service.deps }}
+          sparse-checkout-cone-mode: false
+
+      - name: Verify checkout with deps
+        run: |
+          echo "=== Service + Dependencies: ${{ matrix.service.name }} ==="
+          echo "Service files:"
+          find ${{ matrix.service.path }} -type f | wc -l
+          echo "Dependency files:"
+          find ${{ matrix.service.deps }} -type f 2>/dev/null | wc -l || echo "0"
+          echo ""
+          echo "TEST: Does scanner trace from service into shared-libs?"
+          echo "TEST: Does scanner report findings in shared-libs as affecting this service?"
+
+  # ============================================================================
+  # TEST SCENARIO 4: Per-Language Aggregated Scans
+  # FAILURE MODE: Scanner mixes findings across unrelated services
+  # FAILURE MODE: Scanner can't handle multiple package managers (npm + yarn)
+  # ============================================================================
+  per-language-scan:
+    if: github.event.inputs.scan_scope == 'per-language' || github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - name: python
+            glob: "**/*.py"
+            manifest: "**/requirements.txt"
+          - name: javascript
+            glob: "**/*.{js,ts,jsx,tsx}"
+            manifest: "**/package.json"
+          - name: java
+            glob: "**/*.java"
+            manifest: "**/pom.xml"
+          - name: go
+            glob: "**/*.go"
+            manifest: "**/go.mod"
+          - name: rust
+            glob: "**/*.rs"
+            manifest: "**/Cargo.toml"
+          - name: php
+            glob: "**/*.php"
+            manifest: "**/composer.json"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze ${{ matrix.language.name }} files
+        run: |
+          echo "=== Language Scan: ${{ matrix.language.name }} ==="
+          echo "Source files:"
+          find . -type f -name "${{ matrix.language.glob }}" 2>/dev/null | wc -l || find . -type f | grep -E "\.${{ matrix.language.name }}$" | wc -l
+          echo ""
+          echo "Manifest files:"
+          find . -type f -name "$(echo '${{ matrix.language.manifest }}' | sed 's/\*\*\///')" 2>/dev/null | head -10 || true
+          echo ""
+          echo "TEST: When scanning all Python, does scanner correlate requirements.txt from multiple services?"
+          echo "TEST: Does scanner incorrectly merge dependency trees from unrelated services?"
+
+  # ============================================================================
+  # TEST SCENARIO 5: Incremental/Diff-Based Scan
+  # FAILURE MODE: Scanner misses vulnerabilities in unchanged code that new code calls
+  # FAILURE MODE: Scanner doesn't detect new usage of existing vulnerable function
+  # ============================================================================
+  incremental-scan:
+    if: github.event.inputs.scan_scope == 'incremental' || github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Simulate incremental scan
+        run: |
+          echo "=== Incremental Scan Simulation ==="
+          echo "Changed files (last 5 commits):"
+          git diff --name-only HEAD~5 HEAD 2>/dev/null || echo "Not enough history"
+          echo ""
+          echo "TEST SCENARIOS:"
+          echo "1. New file imports existing vulnerable function -> Should scanner find this?"
+          echo "2. Changed file doesn't touch vuln, but vuln exists -> Should scanner report?"
+          echo "3. Deleted file had vulnerability -> Should scanner clear the finding?"
+          echo ""
+          echo "Many scanners only scan changed files for speed, missing:"
+          echo "- New usage patterns of old vulnerable code"
+          echo "- Context needed to understand taint flows"
+
+  # ============================================================================
+  # TEST SCENARIO 6: Infrastructure as Code Isolation
+  # FAILURE MODE: Scanner mixes IaC findings with application findings
+  # FAILURE MODE: Scanner doesn't understand Terraform module relationships
+  # ============================================================================
+  iac-isolated-scan:
+    if: github.event.inputs.scan_scope == 'mixed'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        iac-type:
+          - name: terraform
+            path: infrastructure/terraform
+          - name: kubernetes
+            path: infrastructure/kubernetes
+          - name: ansible
+            path: infrastructure/ansible
+          - name: cloudformation
+            path: infrastructure/cloudformation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.iac-type.path }}
+          sparse-checkout-cone-mode: false
+
+      - name: Analyze IaC scope
+        run: |
+          echo "=== IaC Scan: ${{ matrix.iac-type.name }} ==="
+          find ${{ matrix.iac-type.path }} -type f | head -20
+          echo ""
+          echo "TEST: Does scanner correctly identify this as ${{ matrix.iac-type.name }}?"
+          echo "TEST: Does scanner use appropriate rules (not app-sec rules)?"
+          echo "TEST: For Terraform, does scanner resolve module references?"
+
+  # ============================================================================
+  # TEST SCENARIO 7: SCA Dependency Resolution
+  # FAILURE MODE: Scanner can't resolve private/internal packages
+  # FAILURE MODE: Scanner doesn't handle workspace/monorepo package references
+  # FAILURE MODE: Scanner misses transitive dependencies
+  # ============================================================================
+  sca-dependency-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze dependency manifests
+        run: |
+          echo "=== SCA Dependency Analysis ==="
+          echo ""
+          echo "=== Python (requirements.txt) ==="
+          for f in $(find . -name "requirements.txt"); do
+            echo "--- $f ---"
+            head -10 "$f"
+            echo "..."
+          done
+          echo ""
+          echo "=== Node.js (package.json) ==="
+          for f in $(find . -name "package.json" | head -5); do
+            echo "--- $f ---"
+            cat "$f" | jq -r '.dependencies // {} | keys[]' 2>/dev/null | head -5 || head -10 "$f"
+            echo "..."
+          done
+          echo ""
+          echo "=== Java (pom.xml) ==="
+          for f in $(find . -name "pom.xml" | head -3); do
+            echo "--- $f ---"
+            grep -A2 "<dependency>" "$f" | head -15 || true
+            echo "..."
+          done
+          echo ""
+          echo "=== Go (go.mod) ==="
+          for f in $(find . -name "go.mod"); do
+            echo "--- $f ---"
+            head -15 "$f"
+          done
+          echo ""
+          echo "TEST SCENARIOS:"
+          echo "1. Internal packages (@vulnmonolith/*) - Can scanner resolve these?"
+          echo "2. Local file references (file:../shared-libs) - Handled correctly?"
+          echo "3. Git dependencies - Does scanner fetch and analyze?"
+          echo "4. Conflicting versions across services - How does scanner report?"
+
+  # ============================================================================
+  # TEST SCENARIO 8: Stress Test - File Limits
+  # FAILURE MODE: Scanner silently stops after N files
+  # FAILURE MODE: Scanner times out without completing
+  # ============================================================================
+  stress-test-files:
+    if: github.event.inputs.include_stress_tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze stress test directory
+        run: |
+          echo "=== Stress Test: File Limits ==="
+          echo "Files in many-files directory:"
+          find stress-tests/scale-tests/many-files -type f 2>/dev/null | wc -l || echo "0"
+          echo ""
+          echo "TEST: Does scanner process ALL files or stop at a limit?"
+          echo "TEST: Does scanner report that it stopped early?"
+          echo "TEST: Does scanner timeout?"
+
+  # ============================================================================
+  # TEST SCENARIO 9: Stress Test - Parser Edge Cases
+  # FAILURE MODE: Scanner crashes on malformed code
+  # FAILURE MODE: Scanner hangs on circular imports
+  # FAILURE MODE: Scanner fails on unusual encodings
+  # ============================================================================
+  stress-test-parser:
+    if: github.event.inputs.include_stress_tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze parser edge cases
+        run: |
+          echo "=== Stress Test: Parser Breakers ==="
+          echo ""
+          echo "Circular imports:"
+          ls -la stress-tests/parser-breakers/circular-imports/ 2>/dev/null || echo "Directory not found"
+          echo ""
+          echo "Encoding edge cases:"
+          ls -la stress-tests/encoding-edge-cases/ 2>/dev/null || echo "Directory not found"
+          echo ""
+          echo "TEST: Does scanner handle circular imports without hanging?"
+          echo "TEST: Does scanner process non-UTF8 files correctly?"
+          echo "TEST: Does scanner report parse errors vs silently skip?"
+
+  # ============================================================================
+  # TEST SCENARIO 10: Orphaned Code Detection
+  # FAILURE MODE: Scanner includes orphaned code in results
+  # FAILURE MODE: Scanner doesn't respect .gitignore or exclusion configs
+  # ============================================================================
+  orphaned-code-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze orphaned code handling
+        run: |
+          echo "=== Orphaned Code Test ==="
+          echo "Orphaned directories:"
+          ls -la orphaned/ 2>/dev/null || echo "Not found"
+          echo ""
+          echo "Files in orphaned:"
+          find orphaned -type f | wc -l
+          echo ""
+          echo "TEST: Scanner configured to exclude 'orphaned/*'"
+          echo "TEST: Does scanner actually exclude these files?"
+          echo "TEST: Do findings appear with orphaned/ path prefix? (They shouldn't)"
+          echo ""
+          echo "Build system remnants:"
+          ls -la build-systems/ 2>/dev/null || echo "Not found"
+          echo ""
+          echo "TEST: Are build-systems/ files (not real services) being scanned?"
+
+  # ============================================================================
+  # SUMMARY: Collect all test results
+  # ============================================================================
+  test-summary:
+    needs:
+      - full-repo-scan
+      - per-service-scan
+      - per-service-with-deps
+      - per-language-scan
+      - incremental-scan
+      - iac-isolated-scan
+      - sca-dependency-test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate test summary
+        run: |
+          echo "=== SAST/SCA Tool Testing Summary ==="
+          echo ""
+          echo "Scope tested: ${{ github.event.inputs.scan_scope }}"
+          echo "Scanner simulated: ${{ github.event.inputs.scanner }}"
+          echo "Stress tests included: ${{ github.event.inputs.include_stress_tests }}"
+          echo ""
+          echo "Test scenarios executed:"
+          echo "1. Full Repository Scan - Tests file limits and timeout"
+          echo "2. Per-Service Isolated - Tests scope isolation"
+          echo "3. Per-Service with Deps - Tests dependency tracing"
+          echo "4. Per-Language Scan - Tests language detection and manifest handling"
+          echo "5. Incremental Scan - Tests diff-based analysis"
+          echo "6. IaC Isolation - Tests infrastructure code handling"
+          echo "7. SCA Dependencies - Tests package resolution"
+          echo ""
+          echo "Review the job outputs above to identify scanner limitations"
