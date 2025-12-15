@@ -1,0 +1,629 @@
+# Complex Monorepo Build Configuration
+# Purpose: Test SAST/SCA tool behavior with multi-service, multi-language monorepos
+#
+# Test Scenarios:
+# 1. Path-filtered builds - Does the scanner follow path filters or scan entire repo?
+# 2. Sparse checkouts - Does the scanner work with partial repo clones?
+# 3. Matrix builds - Does the scanner correlate findings across matrix jobs?
+# 4. Multi-language services - Does the scanner handle polyglot projects?
+# 5. Cross-service dependencies - Does the scanner understand shared-libs usage?
+# 6. Conditional IaC scanning - Does the scanner properly scope IaC vs app code?
+# 7. Build-time code generation - Does the scanner see generated code?
+# 8. File/time limits - Does the scanner hit limits on large services?
+
+name: Monorepo Service Builds
+
+on:
+  push:
+    branches: [main, develop, 'release/*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Comma-separated list of services to build (or "all")'
+        required: false
+        default: 'all'
+      include_orphaned:
+        description: 'Include orphaned code in build context'
+        type: boolean
+        default: false
+
+# Minimal permissions - services request what they need
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: vulnmonolith
+
+jobs:
+  # ============================================================================
+  # CHANGE DETECTION - Determines which services need building
+  # TEST: Do SAST tools respect detected changes or scan everything?
+  # ============================================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      auth-service: ${{ steps.changes.outputs.auth-service }}
+      api-gateway: ${{ steps.changes.outputs.api-gateway }}
+      billing-service: ${{ steps.changes.outputs.billing-service }}
+      realtime-service: ${{ steps.changes.outputs.realtime-service }}
+      mobile-bff: ${{ steps.changes.outputs.mobile-bff }}
+      ml-inference: ${{ steps.changes.outputs.ml-inference }}
+      data-pipeline: ${{ steps.changes.outputs.data-pipeline }}
+      legacy-monolith: ${{ steps.changes.outputs.legacy-monolith }}
+      shared-libs: ${{ steps.changes.outputs.shared-libs }}
+      infrastructure: ${{ steps.changes.outputs.infrastructure }}
+      any-service: ${{ steps.changes.outputs.any-service }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            auth-service:
+              - 'services/auth-service/**'
+              - 'shared-libs/**'
+            api-gateway:
+              - 'services/api-gateway/**'
+              - 'shared-libs/**'
+            billing-service:
+              - 'services/billing-service/**'
+              - 'shared-libs/**'
+            realtime-service:
+              - 'services/realtime-service/**'
+              - 'shared-libs/**'
+            mobile-bff:
+              - 'services/mobile-bff/**'
+              - 'shared-libs/**'
+            ml-inference:
+              - 'services/ml-inference/**'
+              - 'shared-libs/**'
+            data-pipeline:
+              - 'services/data-pipeline/**'
+              - 'shared-libs/**'
+            legacy-monolith:
+              - 'services/legacy-monolith/**'
+            shared-libs:
+              - 'shared-libs/**'
+            infrastructure:
+              - 'infrastructure/**'
+            any-service:
+              - 'services/**'
+
+  # ============================================================================
+  # JAVA SERVICE: auth-service (Maven)
+  # TEST: Does scanner properly resolve Maven dependencies from pom.xml?
+  # TEST: Does scanner follow the standard Maven directory structure?
+  # ============================================================================
+  build-auth-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.auth-service == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'auth')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/auth-service
+            shared-libs
+          sparse-checkout-cone-mode: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B clean package -DskipTests
+
+      - name: Run tests
+        run: mvn -B test
+
+      - name: Package
+        run: mvn -B package -DskipTests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auth-service-jar
+          path: services/auth-service/target/*.jar
+          retention-days: 5
+
+  # ============================================================================
+  # NODE.JS SERVICE: api-gateway (npm)
+  # TEST: Does scanner handle node_modules correctly?
+  # TEST: Does scanner correlate package.json with lock file?
+  # ============================================================================
+  build-api-gateway:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api-gateway == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'api-gateway')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api-gateway
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/api-gateway
+            shared-libs/internal-sdk
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/api-gateway/package-lock.json
+
+      - name: Install shared SDK
+        run: |
+          cd ../../shared-libs/internal-sdk
+          npm ci
+          npm link
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm link @vulnmonolith/internal-sdk
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-gateway-dist
+          path: services/api-gateway/dist/
+          retention-days: 5
+
+  # ============================================================================
+  # PYTHON SERVICE: billing-service (pip)
+  # TEST: Does scanner parse requirements.txt correctly?
+  # TEST: Does scanner handle virtual environments?
+  # ============================================================================
+  build-billing-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.billing-service == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'billing')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/billing-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/billing-service
+            shared-libs/generated/protobuf
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: services/billing-service/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+
+      - name: Test
+        run: pytest --cov=. --cov-report=xml || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: billing-service-coverage
+          path: services/billing-service/coverage.xml
+          retention-days: 5
+
+  # ============================================================================
+  # GO + RUST SERVICE: realtime-service (multi-language)
+  # TEST: Does scanner handle CGO/FFI boundaries?
+  # TEST: Does scanner analyze both Go and Rust code?
+  # TEST: Does scanner understand go.mod AND Cargo.toml in same service?
+  # ============================================================================
+  build-realtime-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.realtime-service == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'realtime')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/realtime-service
+            shared-libs/generated/protobuf
+          sparse-checkout-cone-mode: false
+
+      # Build Rust FFI library first
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/realtime-service/rust-ffi
+
+      - name: Build Rust FFI
+        working-directory: services/realtime-service/rust-ffi
+        run: |
+          cargo build --release
+          cp target/release/libcrypto_ffi.so ../crypto/ || cp target/release/libcrypto_ffi.dylib ../crypto/ || true
+
+      # Build Go service with Rust FFI
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: services/realtime-service/go.sum
+
+      - name: Build Go
+        working-directory: services/realtime-service
+        env:
+          CGO_ENABLED: 1
+          CGO_LDFLAGS: "-L./crypto"
+        run: |
+          go mod download
+          go build -o bin/server ./cmd/server
+
+      - name: Test Go
+        working-directory: services/realtime-service
+        run: go test ./... -v || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realtime-service-binary
+          path: services/realtime-service/bin/
+          retention-days: 5
+
+  # ============================================================================
+  # NODE.JS SERVICE: mobile-bff (TypeScript)
+  # TEST: Does scanner handle TypeScript properly?
+  # ============================================================================
+  build-mobile-bff:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mobile-bff == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'mobile')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mobile-bff
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/mobile-bff
+            shared-libs/internal-sdk
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/mobile-bff/package-lock.json
+
+      - name: Install & Build
+        run: |
+          npm ci
+          npm run build --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+  # ============================================================================
+  # PYTHON SERVICE: ml-inference (with native deps)
+  # TEST: Does scanner handle numpy/torch native extensions?
+  # TEST: Does scanner understand ML model files?
+  # ============================================================================
+  build-ml-inference:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ml-inference == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'ml')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ml-inference
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/ml-inference
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run model validation
+        run: python -c "print('Model validation placeholder')"
+
+  # ============================================================================
+  # PYTHON SERVICE: data-pipeline (Spark/Airflow style)
+  # TEST: Does scanner understand DAG definitions?
+  # TEST: Does scanner handle dynamic imports?
+  # ============================================================================
+  build-data-pipeline:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.data-pipeline == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'pipeline')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/data-pipeline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/data-pipeline
+            shared-libs/generated/protobuf
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Validate DAGs
+        run: python -c "print('DAG validation placeholder')"
+
+      - name: Test
+        run: pytest || true
+
+  # ============================================================================
+  # PHP SERVICE: legacy-monolith
+  # TEST: Does scanner handle mixed PHP/HTML?
+  # TEST: Does scanner understand include/require paths?
+  # TEST: Often excluded from scans - verify this gets scanned when included
+  # ============================================================================
+  build-legacy-monolith:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.legacy-monolith == 'true' || github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'legacy')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/legacy-monolith
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/legacy-monolith
+          sparse-checkout-cone-mode: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Lint PHP
+        run: |
+          find . -name "*.php" -exec php -l {} \; || true
+
+      - name: Security check (composer)
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-dev --ignore-platform-reqs || true
+            composer audit || true
+          fi
+
+  # ============================================================================
+  # INFRASTRUCTURE SCANNING (separate from app code)
+  # TEST: Does scanner properly separate IaC findings from app findings?
+  # TEST: Does scanner handle multiple IaC tools in one repo?
+  # ============================================================================
+  scan-infrastructure:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infrastructure == 'true' || github.event.inputs.services == 'all'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [terraform, kubernetes, ansible, cloudformation]
+        include:
+          - tool: terraform
+            path: infrastructure/terraform
+          - tool: kubernetes
+            path: infrastructure/kubernetes
+          - tool: ansible
+            path: infrastructure/ansible
+          - tool: cloudformation
+            path: infrastructure/cloudformation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            infrastructure/${{ matrix.tool == 'terraform' && 'terraform' || matrix.tool == 'kubernetes' && 'kubernetes' || matrix.tool == 'ansible' && 'ansible' || 'cloudformation' }}
+          sparse-checkout-cone-mode: false
+
+      - name: Scan ${{ matrix.tool }}
+        run: |
+          echo "Would run ${{ matrix.tool }} scanner on ${{ matrix.path }}"
+          ls -la ${{ matrix.path }} || true
+
+  # ============================================================================
+  # SHARED LIBRARIES BUILD
+  # TEST: Does scanner understand these are shared across services?
+  # TEST: Does scanner trace dependency usage from shared-libs to services?
+  # ============================================================================
+  build-shared-libs:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.shared-libs == 'true' || github.event.inputs.services == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            shared-libs
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build internal-sdk
+        working-directory: shared-libs/internal-sdk
+        run: |
+          npm ci
+          npm run build --if-present
+          npm test --if-present
+
+      - name: Generate protobuf
+        working-directory: shared-libs/generated/protobuf
+        run: |
+          echo "Protobuf generation placeholder"
+
+  # ============================================================================
+  # FULL INTEGRATION BUILD (all services together)
+  # TEST: Does scanner handle full repo correctly?
+  # TEST: Does scanner hit file/time limits on full build?
+  # ============================================================================
+  integration-build:
+    needs:
+      - build-auth-service
+      - build-api-gateway
+      - build-billing-service
+      - build-realtime-service
+      - build-mobile-bff
+      - build-ml-inference
+      - build-data-pipeline
+      - build-shared-libs
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Integration summary
+        run: |
+          echo "=== Integration Build Summary ==="
+          echo "Services built:"
+          ls -la artifacts/ || echo "No artifacts"
+
+  # ============================================================================
+  # DOCKER BUILDS (with different base images per service)
+  # TEST: Does scanner understand multi-stage Dockerfiles?
+  # TEST: Does scanner correlate container base image vulns with app code?
+  # ============================================================================
+  docker-build:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any-service == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: auth-service
+            context: services/auth-service
+            dockerfile: Dockerfile
+          - name: api-gateway
+            context: services/api-gateway
+            dockerfile: Dockerfile
+          - name: billing-service
+            context: services/billing-service
+            dockerfile: Dockerfile
+          - name: realtime-service
+            context: services/realtime-service
+            dockerfile: Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.service.context }}
+            shared-libs
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+        continue-on-error: true
+
+  # ============================================================================
+  # ORPHANED CODE BUILD (intentionally isolated)
+  # TEST: Does scanner respect exclusion of orphaned directories?
+  # TEST: When explicitly included, does scanner find vulns in orphaned code?
+  # ============================================================================
+  build-orphaned:
+    if: github.event.inputs.include_orphaned == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            orphaned
+          sparse-checkout-cone-mode: false
+
+      - name: Analyze orphaned code
+        run: |
+          echo "=== Orphaned Code Analysis ==="
+          echo "This code is intentionally excluded from normal builds"
+          find orphaned -type f -name "*.py" -o -name "*.js" -o -name "*.java" | head -20
+
+  # ============================================================================
+  # STRESS TEST BUILD (parser/limit testing)
+  # TEST: Does scanner handle intentionally problematic code?
+  # TEST: Does scanner timeout or crash on stress tests?
+  # ============================================================================
+  build-stress-tests:
+    if: github.event.inputs.services == 'all' || contains(github.event.inputs.services, 'stress')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            stress-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Run stress test builds
+        run: |
+          echo "=== Stress Test Summary ==="
+          echo "Many files test:"
+          find stress-tests/scale-tests/many-files -type f | wc -l || echo "0"
+          echo "Circular imports test:"
+          ls stress-tests/parser-breakers/circular-imports/ || true
+          echo "Encoding edge cases:"
+          ls stress-tests/encoding-edge-cases/ || true
