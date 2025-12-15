@@ -1,0 +1,68 @@
+// Root Gradle build file with security issues
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '2.3.0.RELEASE'  // Vulnerable version
+    id 'io.spring.dependency-management' version '1.0.9.RELEASE'
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        // VULNERABILITY: Insecure HTTP repository
+        maven { url 'http://insecure-repo.example.com/maven' }
+        // VULNERABILITY: Trusting all certificates
+        maven {
+            url 'https://private-repo.example.com'
+            credentials {
+                // VULNERABILITY: Hardcoded credentials
+                username 'admin'
+                password 'gradle_repo_password_123'
+            }
+        }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    dependencies {
+        // VULNERABILITY: Known vulnerable versions
+        implementation 'org.apache.logging.log4j:log4j-core:2.14.0'  // Log4Shell
+        implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.8'  // CVE-2019-*
+        implementation 'org.apache.struts:struts2-core:2.3.30'  // Multiple CVEs
+        implementation 'commons-collections:commons-collections:3.2.1'  // Deserialization
+        implementation 'org.yaml:snakeyaml:1.25'  // CVE-2022-*
+
+        // VULNERABILITY: Using vulnerable Spring version
+        implementation 'org.springframework:spring-core:5.2.0.RELEASE'
+
+        // Test dependencies with vulnerabilities
+        testImplementation 'junit:junit:4.12'  // Older version
+    }
+}
+
+// VULNERABILITY: Executing arbitrary commands
+task executeScript(type: Exec) {
+    commandLine 'bash', '-c', System.getenv('BUILD_COMMAND') ?: 'echo default'
+}
+
+// VULNERABILITY: Downloading and executing remote scripts
+task downloadPlugin {
+    doLast {
+        def script = new URL('http://plugins.example.com/install.sh').text
+        ['bash', '-c', script].execute()
+    }
+}
+
+// VULNERABILITY: Publishing with hardcoded credentials
+publishing {
+    repositories {
+        maven {
+            url = 'https://maven.example.com/releases'
+            credentials {
+                username = 'deploy_user'
+                password = 'deploy_password_456'
+            }
+        }
+    }
+}

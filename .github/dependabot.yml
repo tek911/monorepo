@@ -1,0 +1,39 @@
+# Dependabot configuration with issues
+version: 2
+
+updates:
+  # ISSUE: Update schedule too infrequent for security updates
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # ISSUE: Overly broad ignore rules - ignoring security updates
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+      # ISSUE: Ignoring specific packages that may have vulnerabilities
+      - dependency-name: "lodash"
+      - dependency-name: "minimist"
+      - dependency-name: "node-fetch"
+    # ISSUE: Low limit may miss critical updates
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: "pip"
+    directory: "/services/billing-service"
+    schedule:
+      interval: "weekly"
+    # ISSUE: Missing security-updates-only configuration
+    ignore:
+      - dependency-name: "requests"
+        versions: [">=2.0.0"]
+
+  - package-ecosystem: "maven"
+    directory: "/services/auth-service"
+    schedule:
+      interval: "monthly"
+    # ISSUE: Ignoring all patch updates including security fixes
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+
+  # ISSUE: Missing ecosystems for Go, Docker, GitHub Actions

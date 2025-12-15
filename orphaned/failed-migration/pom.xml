@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Failed Migration Project - ABANDONED 2019 -->
+<!-- Contains severely outdated dependencies -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.vulnmonolith.orphaned</groupId>
+    <artifactId>failed-migration</artifactId>
+    <version>0.1.0-ABANDONED</version>
+    <packaging>jar</packaging>
+
+    <name>Failed Migration</name>
+    <description>Incomplete migration - ABANDONED</description>
+
+    <properties>
+        <java.version>1.8</java.version>
+        <!-- VULNERABILITY: Extremely outdated versions from 2017-2018 -->
+        <spring.version>4.3.0.RELEASE</spring.version>
+        <struts.version>2.3.20</struts.version>
+        <log4j.version>1.2.17</log4j.version>
+        <jackson.version>2.8.0</jackson.version>
+    </properties>
+
+    <dependencies>
+        <!-- VULNERABILITY: Spring 4.x - multiple CVEs -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Struts 2.3.x - Remote code execution -->
+        <dependency>
+            <groupId>org.apache.struts</groupId>
+            <artifactId>struts2-core</artifactId>
+            <version>${struts.version}</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Log4j 1.x - End of life -->
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Jackson 2.8 - Deserialization issues -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Commons Collections 3.x - Deserialization gadgets -->
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+            <version>3.2.1</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Old Apache Commons -->
+        <dependency>
+            <groupId>commons-beanutils</groupId>
+            <artifactId>commons-beanutils</artifactId>
+            <version>1.9.2</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-fileupload</groupId>
+            <artifactId>commons-fileupload</artifactId>
+            <version>1.3.1</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Hibernate with known issues -->
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <version>4.3.0.Final</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Velocity template engine -->
+        <dependency>
+            <groupId>org.apache.velocity</groupId>
+            <artifactId>velocity</artifactId>
+            <version>1.7</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Old MySQL connector -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.38</version>
+        </dependency>
+
+        <!-- VULNERABILITY: SnakeYAML old version -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>1.17</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Fastjson - Multiple RCE vulnerabilities -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.24</version>
+        </dependency>
+
+        <!-- VULNERABILITY: Old XStream -->
+        <dependency>
+            <groupId>com.thoughtworks.xstream</groupId>
+            <artifactId>xstream</artifactId>
+            <version>1.4.9</version>
+        </dependency>
+    </dependencies>
+</project>

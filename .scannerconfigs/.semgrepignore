@@ -1,0 +1,38 @@
+# Semgrep ignore patterns
+# Test: Do scanners respect these exclusions?
+
+# Test directories (should be excluded)
+test/
+tests/
+__tests__/
+*_test.go
+*_test.py
+*.spec.ts
+*.spec.js
+*.test.ts
+*.test.js
+
+# Vendor/dependencies (should be excluded)
+vendor/
+node_modules/
+.venv/
+venv/
+
+# Generated code
+*.pb.go
+*_generated.go
+*.gen.ts
+
+# Documentation with code examples
+docs/
+*.md
+
+# ISSUE: These exclusions might hide real vulnerabilities
+# Overly broad patterns that could miss issues
+*.config.js
+*.config.ts
+**/config/**
+
+# ISSUE: Excluding entire service directories
+services/legacy-monolith/
+orphaned/

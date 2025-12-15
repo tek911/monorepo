@@ -1,0 +1,52 @@
+# tfsec Terraform security scanning configuration
+# Test: Verify tfsec respects configuration
+
+# Minimum severity to report - ISSUE: Only reporting critical
+minimum_severity: CRITICAL
+
+# ISSUE: Excluding many important checks
+exclude:
+  # AWS
+  - aws-ec2-no-public-ingress-sgr
+  - aws-ec2-no-public-egress-sgr
+  - aws-s3-enable-bucket-encryption
+  - aws-s3-enable-bucket-logging
+  - aws-s3-enable-versioning
+  - aws-s3-block-public-acls
+  - aws-s3-block-public-policy
+  - aws-s3-ignore-public-acls
+  - aws-s3-restrict-public-buckets
+  - aws-iam-no-policy-wildcards
+  - aws-iam-no-user-attached-policies
+  - aws-rds-enable-at-rest-encryption
+  - aws-rds-encrypt-instance-storage-data
+  - aws-cloudtrail-enable-all-regions
+  - aws-cloudtrail-enable-log-validation
+  - aws-kms-auto-rotate-keys
+  - aws-vpc-no-default-vpc
+  - aws-elb-use-https
+  - aws-lambda-enable-tracing
+
+  # General
+  - general-secrets-no-plaintext-exposure
+  - general-secrets-sensitive-in-variable
+
+  # Kubernetes
+  - kubernetes-network-no-public-ingress
+  - kubernetes-general-no-secrets-in-spec
+
+# ISSUE: Include patterns too broad
+include:
+  - "**/*.tf"
+
+# ISSUE: Exclude patterns hide vulnerabilities
+exclude-path:
+  - test-fixtures/
+  - orphaned/
+  - infrastructure/terraform/aws-legacy/
+  - "**/*_test.tf"
+  - "**/examples/"
+
+# ISSUE: Force all passes
+force-all-dirs: false
+soft-fail: true

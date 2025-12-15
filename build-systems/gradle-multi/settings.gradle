@@ -1,0 +1,22 @@
+// Gradle settings with security issues
+rootProject.name = 'vulnmonolith-gradle'
+
+include 'core'
+include 'web'
+include 'api'
+
+// VULNERABILITY: Loading plugins from insecure source
+pluginManagement {
+    repositories {
+        // VULNERABILITY: HTTP repository for plugins
+        maven { url 'http://plugins.example.com/maven' }
+        gradlePluginPortal()
+    }
+}
+
+// VULNERABILITY: Including external build with no verification
+includeBuild('../external-dependency') {
+    dependencySubstitution {
+        substitute module('com.example:lib') with project(':')
+    }
+}

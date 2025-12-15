@@ -1,0 +1,35 @@
+# Snyk policy file
+# Test: Verify Snyk respects ignore policies
+
+version: v1.25.0
+
+ignore:
+  # ISSUE: Ignoring high severity vulnerabilities
+  SNYK-JS-LODASH-567746:
+    - '*':
+        reason: "Used in test code only"
+        expires: 2099-12-31T00:00:00.000Z
+
+  # ISSUE: Permanent ignore without expiration review
+  SNYK-PYTHON-PYYAML-559098:
+    - '*':
+        reason: "Cannot upgrade due to compatibility"
+        expires: 2099-12-31T00:00:00.000Z
+
+  # ISSUE: Ignoring entire vulnerability classes
+  'snyk:lic:*':
+    - '*':
+        reason: "License issues handled separately"
+
+patch:
+  # ISSUE: Using patches instead of upgrading
+  SNYK-JS-MINIMIST-559764:
+    - minimist:
+        patched: '2020-01-01T00:00:00.000Z'
+
+exclude:
+  global:
+    # ISSUE: Excluding paths that might contain real vulnerabilities
+    - test-fixtures/**
+    - orphaned/**
+    - "**/*.test.js"

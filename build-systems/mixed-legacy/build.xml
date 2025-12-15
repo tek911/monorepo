@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ant build file with security vulnerabilities -->
+<project name="legacy-app" default="build" basedir=".">
+
+    <!-- VULNERABILITY: Hardcoded credentials -->
+    <property name="db.host" value="prod-db.internal"/>
+    <property name="db.user" value="root"/>
+    <property name="db.password" value="ant_db_password_123"/>
+    <property name="deploy.user" value="deploy"/>
+    <property name="deploy.password" value="deploy_secret_456"/>
+
+    <!-- VULNERABILITY: Insecure download source -->
+    <property name="lib.url" value="http://insecure-downloads.example.com/libs"/>
+
+    <target name="init">
+        <mkdir dir="build"/>
+        <mkdir dir="lib"/>
+    </target>
+
+    <!-- VULNERABILITY: Downloading dependencies over HTTP -->
+    <target name="download-deps" depends="init">
+        <get src="${lib.url}/vulnerable-lib-1.0.jar" dest="lib/vulnerable-lib.jar"/>
+        <get src="http://central.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar" dest="lib/log4j.jar"/>
+    </target>
+
+    <!-- VULNERABILITY: Executing shell commands with user input -->
+    <target name="build-with-version">
+        <exec executable="bash">
+            <arg value="-c"/>
+            <!-- Command injection possible via ${version} property -->
+            <arg value="echo Building version ${version} &amp;&amp; javac -d build src/*.java"/>
+        </exec>
+    </target>
+
+    <!-- VULNERABILITY: World-readable deployment -->
+    <target name="deploy" depends="build">
+        <scp todir="${deploy.user}:${deploy.password}@prod-server:/var/www/app"
+             trust="yes">  <!-- VULNERABILITY: Trusting all hosts -->
+            <fileset dir="build"/>
+        </scp>
+        <sshexec host="prod-server"
+                 username="${deploy.user}"
+                 password="${deploy.password}"
+                 trust="yes"
+                 command="chmod -R 777 /var/www/app"/>  <!-- VULNERABILITY: World-writable -->
+    </target>
+
+    <!-- VULNERABILITY: Executing remote scripts -->
+    <target name="post-deploy">
+        <exec executable="bash">
+            <arg value="-c"/>
+            <arg value="curl -s http://scripts.example.com/health-check.sh | bash"/>
+        </exec>
+    </target>
+
+    <!-- VULNERABILITY: SQL execution with hardcoded creds -->
+    <target name="db-migrate">
+        <sql driver="com.mysql.jdbc.Driver"
+             url="jdbc:mysql://${db.host}/app"
+             userid="${db.user}"
+             password="${db.password}">
+            <fileset dir="sql">
+                <include name="*.sql"/>
+            </fileset>
+        </sql>
+    </target>
+
+</project>

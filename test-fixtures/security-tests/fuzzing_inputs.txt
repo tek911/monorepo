@@ -1,0 +1,70 @@
+# Fuzzing Input Test File
+# INTENTIONAL malformed/malicious inputs for security testing
+# These should be EXCLUDED from security scan results
+
+# Buffer overflow attempts
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n
+
+# Format string attacks
+%s%s%s%s%s%s%s%s%s%s
+%x%x%x%x%x%x%x%x%x%x
+%p%p%p%p%p%p%p%p%p%p
+%n%n%n%n%n%n%n%n%n%n
+
+# Null byte injection
+test%00.jpg
+../../../etc/passwd%00.png
+admin%00
+user\x00admin
+
+# Unicode exploits
+test＜script＞alert(1)＜/script＞
+%u003cscript%u003ealert(1)%u003c/script%u003e
+\u003cscript\u003ealert(1)\u003c/script\u003e
+
+# Integer overflow
+2147483648
+4294967296
+9999999999999999999999999999999999
+-2147483649
+
+# Special characters
+!@#$%^&*()_+-=[]{}|;':",.<>?/`~
+\r\n\r\n
+\x00\x01\x02\x03\x04\x05
+\n\r\t\v\f
+
+# JSON injection
+{"__proto__": {"admin": true}}
+{"constructor": {"prototype": {"admin": true}}}
+
+# Command injection
+; ls -la
+| cat /etc/passwd
+`id`
+$(whoami)
+&& rm -rf /
+
+# SQL injection
+' OR '1'='1
+'; DROP TABLE users; --
+1 UNION SELECT * FROM passwords
+
+# XSS payloads
+<script>alert('XSS')</script>
+<img src=x onerror=alert(1)>
+javascript:alert(1)
+
+# Path traversal
+../../../../../../../etc/passwd
+....//....//....//etc/passwd
+..\..\..\..\..\..\windows\system32\config\sam
+
+# LDAP injection
+*)(objectClass=*
+admin)(&)
+*
+
+# XML/XXE payloads
+<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
